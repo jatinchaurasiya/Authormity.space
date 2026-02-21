@@ -1,21 +1,32 @@
 import { NextResponse } from 'next/server'
-import { buildAuthorizationUrl } from '@/lib/linkedin'
 import { randomBytes } from 'crypto'
 import { cookies } from 'next/headers'
 
-export async function GET() {
-    const state = randomBytes(16).toString('hex')
+const SCOPE = 'openid profile email w_member_social'
+const STATE_COOKIE = 'li_oauth_state'
+const STATE_TTL = 60 * 10 // 10 minutes
 
-    // Store state in cookie for CSRF verification (cookies() is async in Next.js 15)
+export async function GET(): Promise<NextResponse> {
+    const state = randomBytes(32).toString('hex')
+
+    const params = new URLSearchParams({
+        response_type: 'code',
+        client_id: process.env.LINKEDIN_CLIENT_ID!,
+        redirect_uri: process.env.LINKEDIN_REDIRECT_URI!,
+        state,
+        scope: SCOPE,
+    })
+
+    const authUrl = `https://www.linkedin.com/oauth/v2/authorization?${params.toString()}`
+
     const cookieStore = await cookies()
-    cookieStore.set('linkedin_oauth_state', state, {
+    cookieStore.set(STATE_COOKIE, state, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: true,
         sameSite: 'lax',
-        maxAge: 60 * 10, // 10 minutes
+        maxAge: STATE_TTL,
         path: '/',
     })
 
-    const authUrl = buildAuthorizationUrl(state)
     return NextResponse.redirect(authUrl)
 }
