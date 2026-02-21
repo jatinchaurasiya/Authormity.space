@@ -1,230 +1,174 @@
-import CryptoJS from 'crypto-js'
-import type { LinkedInTokenResponse, LinkedInUserInfo } from '@/types'
-
-const LINKEDIN_API_BASE = 'https://api.linkedin.com/v2'
 const LINKEDIN_OIDC_BASE = 'https://www.linkedin.com/oauth/v2'
+const LINKEDIN_API_BASE = 'https://api.linkedin.com/v2'
 
-// ─── Token Encryption ─────────────────────────────────────────────────────────
-
-export function encryptToken(token: string): string {
-    return CryptoJS.AES.encrypt(token, process.env.TOKEN_ENCRYPTION_KEY!).toString()
-}
-
-export function decryptToken(encrypted: string): string {
-    const bytes = CryptoJS.AES.decrypt(encrypted, process.env.TOKEN_ENCRYPTION_KEY!)
-    return bytes.toString(CryptoJS.enc.Utf8)
-}
-
-// ─── OAuth Helpers ────────────────────────────────────────────────────────────
-
-export function buildAuthorizationUrl(state: string): string {
-    const params = new URLSearchParams({
-        response_type: 'code',
-        client_id: process.env.LINKEDIN_CLIENT_ID!,
-        redirect_uri: process.env.LINKEDIN_REDIRECT_URI!,
-        state,
-        scope: 'openid profile email w_member_social',
-    })
-    return `${LINKEDIN_OIDC_BASE}/authorization?${params.toString()}`
-}
-
-export async function exchangeCodeForTokens(
-    code: string
-): Promise<LinkedInTokenResponse> {
-    const response = await fetch(`${LINKEDIN_OIDC_BASE}/accessToken`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-            grant_type: 'authorization_code',
-            code,
-            redirect_uri: process.env.LINKEDIN_REDIRECT_URI!,
-            client_id: process.env.LINKEDIN_CLIENT_ID!,
-            client_secret: process.env.LINKEDIN_CLIENT_SECRET!,
-        }),
-    })
-
-    if (!response.ok) {
-        throw new Error(`LinkedIn token exchange failed: ${await response.text()}`)
-    }
-
-    return response.json()
-}
-
-export async function refreshLinkedInToken(
-    refreshToken: string
-): Promise<LinkedInTokenResponse> {
-    const response = await fetch(`${LINKEDIN_OIDC_BASE}/accessToken`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-            grant_type: 'refresh_token',
-            refresh_token: refreshToken,
-            client_id: process.env.LINKEDIN_CLIENT_ID!,
-            client_secret: process.env.LINKEDIN_CLIENT_SECRET!,
-        }),
-    })
-
-    if (!response.ok) {
-        throw new Error(`LinkedIn token refresh failed: ${await response.text()}`)
-    }
-
-    return response.json()
-}
-
-// ─── User Profile ─────────────────────────────────────────────────────────────
-
-export async function getLinkedInUserInfo(
+export interface LinkedInTokens {
     accessToken: string
-): Promise<LinkedInUserInfo> {
-    const response = await fetch('https://api.linkedin.com/v2/userinfo', {
-        headers: { Authorization: `Bearer ${accessToken}` },
-    })
-
-    if (!response.ok) {
-        throw new Error(`LinkedIn userinfo failed: ${await response.text()}`)
-    }
-
-    return response.json()
+    refreshToken: string
+    expiresIn: number
 }
 
-// ─── Post Publishing ──────────────────────────────────────────────────────────
+export interface LinkedInProfile {
+    id: string
+    name: string
+    email: string
+    avatar: string
+}
 
+interface LinkedInTokenResponse {
+    access_token: string
+    refresh_token: string
+    expires_in: number
+    token_type: string
+}
+
+interface LinkedInUserInfoResponse {
+    sub: string
+    name: string
+    given_name: string
+    family_name: string
+    email: string
+    picture?: string
+    locale?: string
+}
+
+async function fetchOrThrow(url: string, init: RequestInit, label: string): Promise<Response> {
+    const res = await fetch(url, init)
+    if (!res.ok) {
+        const body = await res.text().catch(() => '(unreadable body)')
+        throw new Error(`LinkedIn ${label} failed [${res.status}]: ${body}`)
+    }
+    return res
+}
+
+/**
+ * Exchanges an authorization code for LinkedIn OAuth tokens.
+ */
+export async function exchangeCodeForToken(code: string): Promise<LinkedInTokens> {
+    const res = await fetchOrThrow(
+        `${LINKEDIN_OIDC_BASE}/accessToken`,
+        {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                grant_type: 'authorization_code',
+                code,
+                redirect_uri: process.env.LINKEDIN_REDIRECT_URI!,
+                client_id: process.env.LINKEDIN_CLIENT_ID!,
+                client_secret: process.env.LINKEDIN_CLIENT_SECRET!,
+            }),
+        },
+        'token exchange'
+    )
+
+    const data: LinkedInTokenResponse = await res.json()
+    return {
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token,
+        expiresIn: data.expires_in,
+    }
+}
+
+/**
+ * Fetches the authenticated user's LinkedIn profile via OIDC userinfo endpoint.
+ */
+export async function getLinkedInProfile(accessToken: string): Promise<LinkedInProfile> {
+    const res = await fetchOrThrow(
+        `${LINKEDIN_API_BASE}/userinfo`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+        'userinfo'
+    )
+
+    const data: LinkedInUserInfoResponse = await res.json()
+    return {
+        id: data.sub,
+        name: data.name ?? `${data.given_name} ${data.family_name}`.trim(),
+        email: data.email,
+        avatar: data.picture ?? '',
+    }
+}
+
+/**
+ * Refreshes an expired LinkedIn access token using a refresh token.
+ */
+export async function refreshAccessToken(refreshToken: string): Promise<LinkedInTokens> {
+    const res = await fetchOrThrow(
+        `${LINKEDIN_OIDC_BASE}/accessToken`,
+        {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                grant_type: 'refresh_token',
+                refresh_token: refreshToken,
+                client_id: process.env.LINKEDIN_CLIENT_ID!,
+                client_secret: process.env.LINKEDIN_CLIENT_SECRET!,
+            }),
+        },
+        'token refresh'
+    )
+
+    const data: LinkedInTokenResponse = await res.json()
+    return {
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token,
+        expiresIn: data.expires_in,
+    }
+}
+
+/**
+ * Publishes a text post to LinkedIn.
+ * Returns the LinkedIn post URN.
+ */
 export async function publishTextPost(
     accessToken: string,
     personId: string,
     content: string
 ): Promise<string> {
-    const response = await fetch(`${LINKEDIN_API_BASE}/ugcPosts`, {
-        method: 'POST',
-        headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-            'X-Restli-Protocol-Version': '2.0.0',
-        },
-        body: JSON.stringify({
-            author: `urn:li:person:${personId}`,
-            lifecycleState: 'PUBLISHED',
-            specificContent: {
-                'com.linkedin.ugc.ShareContent': {
-                    shareCommentary: { text: content },
-                    shareMediaCategory: 'NONE',
-                },
+    const res = await fetchOrThrow(
+        `${LINKEDIN_API_BASE}/ugcPosts`,
+        {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+                'X-Restli-Protocol-Version': '2.0.0',
             },
-            visibility: {
-                'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC',
-            },
-        }),
-    })
-
-    if (!response.ok) {
-        throw new Error(`LinkedIn publish failed: ${await response.text()}`)
-    }
-
-    const data = await response.json()
-    return data.id // URN of the created post
-}
-
-export async function publishImagePost(
-    accessToken: string,
-    personId: string,
-    content: string,
-    imageBuffer: Uint8Array,
-    imageType: string = 'image/jpeg'
-): Promise<string> {
-    // Step 1: Register upload
-    const registerResponse = await fetch(`${LINKEDIN_API_BASE}/assets?action=registerUpload`, {
-        method: 'POST',
-        headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            registerUploadRequest: {
-                owner: `urn:li:person:${personId}`,
-                recipes: ['urn:li:digitalmediaRecipe:feedshare-image'],
-                serviceRelationships: [
-                    {
-                        identifier: 'urn:li:userGeneratedContent',
-                        relationshipType: 'OWNER',
+            body: JSON.stringify({
+                author: `urn:li:person:${personId}`,
+                lifecycleState: 'PUBLISHED',
+                specificContent: {
+                    'com.linkedin.ugc.ShareContent': {
+                        shareCommentary: { text: content },
+                        shareMediaCategory: 'NONE',
                     },
-                ],
-            },
-        }),
-    })
-
-    if (!registerResponse.ok) {
-        throw new Error(`Image register failed: ${await registerResponse.text()}`)
-    }
-
-    const registerData = await registerResponse.json()
-    const uploadUrl =
-        registerData.value.uploadMechanism['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest']
-            .uploadUrl
-    const assetUrn: string = registerData.value.asset
-
-    // Step 2: Upload binary
-    const uploadResponse = await fetch(uploadUrl, {
-        method: 'PUT',
-        headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': imageType,
-        },
-        body: imageBuffer as BodyInit,
-    })
-
-    if (!uploadResponse.ok) {
-        throw new Error(`Image upload failed: ${await uploadResponse.text()}`)
-    }
-
-    // Step 3: Create post with image
-    const postResponse = await fetch(`${LINKEDIN_API_BASE}/ugcPosts`, {
-        method: 'POST',
-        headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-            'X-Restli-Protocol-Version': '2.0.0',
-        },
-        body: JSON.stringify({
-            author: `urn:li:person:${personId}`,
-            lifecycleState: 'PUBLISHED',
-            specificContent: {
-                'com.linkedin.ugc.ShareContent': {
-                    shareCommentary: { text: content },
-                    shareMediaCategory: 'IMAGE',
-                    media: [
-                        {
-                            status: 'READY',
-                            description: { text: '' },
-                            media: assetUrn,
-                            title: { text: '' },
-                        },
-                    ],
                 },
-            },
-            visibility: {
-                'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC',
-            },
-        }),
-    })
+                visibility: {
+                    'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC',
+                },
+            }),
+        },
+        'publish post'
+    )
 
-    if (!postResponse.ok) {
-        throw new Error(`LinkedIn image post failed: ${await postResponse.text()}`)
-    }
-
-    const postData = await postResponse.json()
-    return postData.id
+    const data = (await res.json()) as { id: string }
+    return data.id
 }
 
+/**
+ * Deletes a LinkedIn post by URN.
+ */
 export async function deleteLinkedInPost(
     accessToken: string,
-    postId: string
+    postUrn: string
 ): Promise<void> {
-    const response = await fetch(`${LINKEDIN_API_BASE}/ugcPosts/${postId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${accessToken}` },
-    })
-
-    if (!response.ok) {
-        throw new Error(`LinkedIn delete failed: ${await response.text()}`)
-    }
+    await fetchOrThrow(
+        `${LINKEDIN_API_BASE}/ugcPosts/${encodeURIComponent(postUrn)}`,
+        {
+            method: 'DELETE',
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'X-Restli-Protocol-Version': '2.0.0',
+            },
+        },
+        'delete post'
+    )
 }
