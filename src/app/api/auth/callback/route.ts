@@ -21,13 +21,14 @@ export async function GET(req: NextRequest) {
     }
 
     // Verify state parameter to prevent CSRF
-    const storedState = cookies().get('linkedin_oauth_state')?.value
+    const cookieStore = await cookies()
+    const storedState = cookieStore.get('linkedin_oauth_state')?.value
     if (!storedState || storedState !== state) {
         return NextResponse.redirect(new URL('/login?error=state_mismatch', req.url))
     }
 
     // Clear state cookie
-    cookies().delete('linkedin_oauth_state')
+    cookieStore.delete('linkedin_oauth_state')
 
     try {
         // Exchange code for tokens

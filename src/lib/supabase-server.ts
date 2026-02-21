@@ -9,10 +9,10 @@ import type { Database } from '@/types'
  * - Server Components
  * - Server Actions
  *
- * Reads/writes cookies for session management.
+ * cookies() is async in Next.js 15 — this function must be awaited.
  */
-export function createServerSupabaseClient() {
-    const cookieStore = cookies()
+export async function createServerSupabaseClient() {
+    const cookieStore = await cookies()
 
     return createServerClient<Database>(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,

@@ -6,8 +6,9 @@ import { cookies } from 'next/headers'
 export async function GET() {
     const state = randomBytes(16).toString('hex')
 
-    // Store state in cookie to verify later (CSRF protection)
-    cookies().set('linkedin_oauth_state', state, {
+    // Store state in cookie for CSRF verification (cookies() is async in Next.js 15)
+    const cookieStore = await cookies()
+    cookieStore.set('linkedin_oauth_state', state, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
