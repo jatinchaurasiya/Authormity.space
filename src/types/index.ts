@@ -274,12 +274,23 @@ export interface LinkedInTokenResponse {
 
 // ─── Supabase DB Types (for convenience) ─────────────────────────────────────
 
+export type ProfileInsert = Omit<Profile, 'created_at' | 'updated_at'> & { created_at?: string; updated_at?: string }
+export type ProfileUpdate = Partial<Omit<Profile, 'id'>>
+
+export type VoiceProfileInsert = Omit<VoiceProfile, 'id' | 'created_at' | 'updated_at'> & { id?: string; created_at?: string; updated_at?: string }
+export type VoiceProfileUpdate = Partial<Omit<VoiceProfile, 'id'>>
+
+export type PostInsert = Omit<Post, 'id' | 'created_at' | 'updated_at'> & { id?: string; created_at?: string; updated_at?: string }
+export type PostUpdate = Partial<Omit<Post, 'id'>>
+
+export type UsageLogInsert = Omit<UsageLog, 'id' | 'created_at'> & { id?: string; created_at?: string }
+
 export interface Database {
     public: {
         Tables: {
-            profiles: { Row: Profile; Insert: Partial<Profile>; Update: Partial<Profile> }
-            voice_profiles: { Row: VoiceProfile; Insert: Partial<VoiceProfile>; Update: Partial<VoiceProfile> }
-            posts: { Row: Post; Insert: Partial<Post>; Update: Partial<Post> }
+            profiles: { Row: Profile; Insert: ProfileInsert; Update: ProfileUpdate }
+            voice_profiles: { Row: VoiceProfile; Insert: VoiceProfileInsert; Update: VoiceProfileUpdate }
+            posts: { Row: Post; Insert: PostInsert; Update: PostUpdate }
             post_versions: { Row: PostVersion; Insert: Partial<PostVersion>; Update: Partial<PostVersion> }
             analytics: { Row: PostAnalytics; Insert: Partial<PostAnalytics>; Update: Partial<PostAnalytics> }
             profile_analytics: { Row: ProfileAnalytics; Insert: Partial<ProfileAnalytics>; Update: Partial<ProfileAnalytics> }
@@ -288,7 +299,7 @@ export interface Database {
             clients: { Row: Client; Insert: Partial<Client>; Update: Partial<Client> }
             engagement_queue: { Row: EngagementQueueItem; Insert: Partial<EngagementQueueItem>; Update: Partial<EngagementQueueItem> }
             comment_templates: { Row: CommentTemplate; Insert: Partial<CommentTemplate>; Update: Partial<CommentTemplate> }
-            usage_logs: { Row: UsageLog; Insert: Partial<UsageLog>; Update: Partial<UsageLog> }
+            usage_logs: { Row: UsageLog; Insert: UsageLogInsert; Update: Partial<Omit<UsageLog, 'id'>> }
             referrals: { Row: Referral; Insert: Partial<Referral>; Update: Partial<Referral> }
         }
     }

@@ -52,7 +52,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
                 target_audience: target_audience.trim() || null,
                 onboarding_completed: true,
                 updated_at: new Date().toISOString(),
-            } as Record<string, unknown>)
+            })
             .eq('id', session.user.id)
 
         if (error) {
@@ -68,9 +68,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             try {
                 await supabase.from('usage_logs').insert({
                     user_id: session.user.id,
-                    action: 'onboarding_complete',
+                    action: 'onboarding_complete' as string,
                     model_used: 'none',
-                } as Record<string, unknown>)
+                    tokens_used: 0,
+                })
             } catch { /* swallow */ }
         })()
 
