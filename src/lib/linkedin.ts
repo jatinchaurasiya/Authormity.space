@@ -40,6 +40,7 @@ async function fetchOrThrow(url: string, init: RequestInit, label: string): Prom
     const res = await fetch(url, init)
     if (!res.ok) {
         const body = await res.text().catch(() => '(unreadable body)')
+
         throw new Error(`LinkedIn ${label} failed [${res.status}]: ${body}`)
     }
     return res

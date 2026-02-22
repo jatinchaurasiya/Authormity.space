@@ -2,13 +2,19 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
+import { supabase } from '@/lib/supabase'
 
 export default function LoginPage() {
     const [isLoading, setIsLoading] = useState(false)
 
-    function handleLinkedInLogin() {
+    async function handleLinkedInLogin() {
         setIsLoading(true)
-        window.location.href = '/api/auth/linkedin'
+        await supabase.auth.signInWithOAuth({
+            provider: 'linkedin_oidc',
+            options: {
+                redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/onboarding`,
+            },
+        })
     }
 
     return (

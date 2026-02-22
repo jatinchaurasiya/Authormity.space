@@ -26,7 +26,8 @@ export default async function AppLayout({
 
     const profileData = profile as { onboarding_completed: boolean } | null
 
-    if (profileData && !profileData.onboarding_completed) {
+    // Redirect to onboarding if profile missing (new user) OR onboarding not complete
+    if (!profileData || !profileData.onboarding_completed) {
         redirect('/onboarding')
     }
 
