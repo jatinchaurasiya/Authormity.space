@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { exchangeCodeForToken, getLinkedInProfile } from '@/lib/linkedin'
 import { encrypt } from '@/lib/encryption'
-import { createAdminClient } from '@/lib/supabase-server'
 
 const STATE_COOKIE = 'li_oauth_state'
+
+function fail500(): NextResponse {
+    return new NextResponse(
+        JSON.stringify({ error: 'Authentication failed' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+    )
+}
 
 function errorRedirect(req: NextRequest, reason: string): NextResponse {
     const url = new URL('/login', req.url)
@@ -16,52 +23,39 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     try {
         const { searchParams } = new URL(req.url)
 
-        // Handle OAuth-level errors from LinkedIn
+        // Handle OAuth-level errors
         const oauthError = searchParams.get('error')
-        if (oauthError) {
-            return errorRedirect(req, oauthError)
-        }
+        if (oauthError) return errorRedirect(req, oauthError)
 
         const code = searchParams.get('code')
         const state = searchParams.get('state')
-
-        if (!code || !state) {
-            return errorRedirect(req, 'missing_params')
-        }
+        if (!code || !state) return errorRedirect(req, 'missing_params')
 
         // ── CSRF state validation ─────────────────────────────────────────
-        const cookieStore = await cookies()
-        const storedState = cookieStore.get(STATE_COOKIE)?.value
-
+        const storedState = req.cookies.get(STATE_COOKIE)?.value
         if (!storedState || storedState !== state) {
             return errorRedirect(req, 'state_mismatch')
         }
 
-        // Clear state cookie immediately
-        cookieStore.delete(STATE_COOKIE)
-
         // ── Env guard ─────────────────────────────────────────────────────
-        if (!process.env.TOKEN_ENCRYPTION_KEY) {
-            return new NextResponse(
-                JSON.stringify({ error: 'Authentication failed' }),
-                { status: 500, headers: { 'Content-Type': 'application/json' } }
-            )
-        }
+        if (!process.env.TOKEN_ENCRYPTION_KEY) return fail500()
 
-        // ── Token exchange ────────────────────────────────────────────────
+        // ── Admin client (service role) — for user management only ────────
+        // Does NOT set any session cookies. Never used for auth.getSession().
+        const admin = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!,
+            { auth: { autoRefreshToken: false, persistSession: false } }
+        )
+
+        // ── Token exchange ─────────────────────────────────────────────────
         const tokens = await exchangeCodeForToken(code)
+        if (!tokens.access_token) return fail500()
 
-        if (!tokens.access_token) {
-            return new NextResponse(
-                JSON.stringify({ error: 'Authentication failed' }),
-                { status: 500, headers: { 'Content-Type': 'application/json' } }
-            )
-        }
-
-        // ── Fetch LinkedIn profile ────────────────────────────────────────
+        // ── Fetch LinkedIn profile ─────────────────────────────────────────
         const profile = await getLinkedInProfile(tokens.access_token)
 
-        // ── Encrypt tokens ────────────────────────────────────────────────
+        // ── Encrypt LinkedIn tokens ────────────────────────────────────────
         const encryptedAccess = encrypt(tokens.access_token)
         const encryptedRefresh = tokens.refresh_token
             ? encrypt(tokens.refresh_token)
@@ -70,15 +64,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
             Date.now() + tokens.expires_in * 1000
         ).toISOString()
 
-        const supabase = createAdminClient()
-
-        // ── Resolve Supabase user ─────────────────────────────────────────
+        // ── Resolve or create Supabase user ───────────────────────────────
         type ProfileRow = { id: string; onboarding_completed: boolean }
         let supabaseUserId: string
         let isNewUser = false
+        let onboardingDone = false
 
-        // 1) Look up by LinkedIn person ID
-        const { data: byLinkedIn } = await supabase
+        const { data: byLinkedIn } = await admin
             .from('profiles')
             .select('id, onboarding_completed')
             .eq('linkedin_person_id', profile.id)
@@ -86,9 +78,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
         if (byLinkedIn) {
             supabaseUserId = byLinkedIn.id
+            onboardingDone = byLinkedIn.onboarding_completed
         } else {
-            // 2) Look up by email
-            const { data: byEmail } = await supabase
+            const { data: byEmail } = await admin
                 .from('profiles')
                 .select('id, onboarding_completed')
                 .eq('email', profile.email)
@@ -96,29 +88,22 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
             if (byEmail) {
                 supabaseUserId = byEmail.id
+                onboardingDone = byEmail.onboarding_completed
             } else {
-                // 3) Create new Supabase auth user
-                const { data: newUser, error: createError } = await supabase
-                    .auth.admin.createUser({
-                        email: profile.email,
-                        email_confirm: true,
-                        user_metadata: { name: profile.name },
-                    })
-
-                if (createError || !newUser.user) {
-                    return new NextResponse(
-                        JSON.stringify({ error: 'Authentication failed' }),
-                        { status: 500, headers: { 'Content-Type': 'application/json' } }
-                    )
-                }
+                const { data: newUser, error: createError } = await admin.auth.admin.createUser({
+                    email: profile.email,
+                    email_confirm: true,
+                    user_metadata: { name: profile.name },
+                })
+                if (createError || !newUser.user) return fail500()
 
                 supabaseUserId = newUser.user.id
                 isNewUser = true
             }
         }
 
-        // ── Upsert profile ────────────────────────────────────────────────
-        const { error: upsertError } = await supabase
+        // ── Upsert profile row ────────────────────────────────────────────
+        const { error: upsertError } = await admin
             .from('profiles')
             .upsert(
                 {
@@ -136,49 +121,82 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
             )
 
         if (upsertError) {
-            return new NextResponse(
-                JSON.stringify({ error: 'Authentication failed' }),
-                { status: 500, headers: { 'Content-Type': 'application/json' } }
-            )
+            console.error('[OAuth callback] upsert error:', upsertError)
+            return fail500()
         }
 
-        // ── Create session via magic link ─────────────────────────────────
-        const { data: linkData, error: linkError } = await supabase
-            .auth.admin.generateLink({
-                type: 'magiclink',
-                email: profile.email,
-            })
-
-        if (linkError || !linkData.properties?.hashed_token) {
-            return new NextResponse(
-                JSON.stringify({ error: 'Authentication failed' }),
-                { status: 500, headers: { 'Content-Type': 'application/json' } }
-            )
-        }
-
-        // ── Build redirect response ───────────────────────────────────────
-        const destination = isNewUser || !(byLinkedIn?.onboarding_completed ?? false)
-            ? '/onboarding'
-            : '/dashboard'
-
-        const response = NextResponse.redirect(new URL(destination, req.url))
-
-        response.cookies.set('sb-token', linkData.properties.hashed_token, {
-            httpOnly: true,
-            secure: true,
-            sameSite: 'lax',
-            path: '/',
-            maxAge: 60 * 60 * 24 * 7, // 7 days
+        // ── Generate magic-link token (server-side only) ──────────────────
+        // We do NOT redirect to the magic link URL.
+        // Instead we exchange the hashed_token via verifyOtp()
+        // so the SSR client can set proper Supabase session cookies.
+        const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
+            type: 'magiclink',
+            email: profile.email,
         })
 
-        return response
-    } catch (error) {
-        // Log server-side only — never expose internals to client
-        console.error('[OAuth callback error]', error)
+        if (linkError || !linkData.properties?.hashed_token) {
+            console.error('[OAuth callback] generateLink error:', linkError)
+            return fail500()
+        }
 
-        return new NextResponse(
-            JSON.stringify({ error: 'Authentication failed' }),
-            { status: 500, headers: { 'Content-Type': 'application/json' } }
+        // ── Build the redirect response first ─────────────────────────────
+        const destination = isNewUser || !onboardingDone ? '/onboarding' : '/dashboard'
+        let response = NextResponse.redirect(new URL(destination, req.url))
+
+        // Clear the OAuth state cookie
+        response.cookies.set(STATE_COOKIE, '', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 0,
+            path: '/',
+        })
+
+        // ── Create SSR client whose cookie handlers write to the response ──
+        // This is the ONLY correct way to set Supabase session cookies in
+        // an App Router Route Handler.
+        const ssrClient = createServerClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            {
+                cookies: {
+                    get(name: string) {
+                        return req.cookies.get(name)?.value
+                    },
+                    set(name: string, value: string, options: CookieOptions) {
+                        // Write to both request and the mutable response reference
+                        req.cookies.set({ name, value, ...options })
+                        response = NextResponse.redirect(new URL(destination, req.url))
+                        response.cookies.set({ name, value, ...options })
+                    },
+                    remove(name: string, options: CookieOptions) {
+                        req.cookies.set({ name, value: '', ...options })
+                        response = NextResponse.redirect(new URL(destination, req.url))
+                        response.cookies.set({ name, value: '', ...options })
+                    },
+                },
+            }
         )
+
+        // ── Exchange hashed_token for a real Supabase session ─────────────
+        // verifyOtp() with token_hash is the PKCE-safe way to turn a
+        // server-generated magic link into real sb-access-token /
+        // sb-refresh-token cookies without any client-side redirect.
+        const { error: sessionError } = await ssrClient.auth.verifyOtp({
+            token_hash: linkData.properties.hashed_token,
+            type: 'magiclink',
+        })
+
+        if (sessionError) {
+            console.error('[OAuth callback] verifyOtp error:', sessionError)
+            return fail500()
+        }
+
+        // response now carries real sb-access-token + sb-refresh-token cookies
+        return response
+
+    } catch (error) {
+        console.error('[OAuth callback] unexpected error:', error)
+        return fail500()
     }
 }
