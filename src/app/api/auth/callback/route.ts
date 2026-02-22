@@ -125,20 +125,6 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
             return fail500()
         }
 
-        // ── Generate magic-link token (server-side only) ──────────────────
-        // We do NOT redirect to the magic link URL.
-        // Instead we exchange the hashed_token via verifyOtp()
-        // so the SSR client can set proper Supabase session cookies.
-        const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
-            type: 'magiclink',
-            email: profile.email,
-        })
-
-        if (linkError || !linkData.properties?.hashed_token) {
-            console.error('[OAuth callback] generateLink error:', linkError)
-            return fail500()
-        }
-
         // ── Build the redirect response first ─────────────────────────────
         const destination = isNewUser || !onboardingDone ? '/onboarding' : '/dashboard'
         const response = NextResponse.redirect(new URL(destination, req.url))
@@ -153,9 +139,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         })
 
         // ── Create SSR client whose cookie handlers write to the response ──
-        // This is the ONLY correct way to set Supabase session cookies in
-        // an App Router Route Handler. By mutating the same `response` object,
-        // all cookies (sb-access-token, sb-refresh-token, etc.) accumulate.
+        // By mutating the same `response` object, all native cookies 
+        // (sb-access-token, sb-refresh-token) accumulate securely.
         const ssrClient = createServerClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
             process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -176,21 +161,19 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
             }
         )
 
-        // ── Exchange hashed_token for a real Supabase session ─────────────
-        // verifyOtp() with token_hash is the PKCE-safe way to turn a
-        // server-generated magic link into real sb-access-token /
-        // sb-refresh-token cookies without any client-side redirect.
-        const { error: sessionError } = await ssrClient.auth.verifyOtp({
-            token_hash: linkData.properties.hashed_token,
-            type: 'magiclink',
+        // ── Native Session Creation ───────────────────────────────────────
+        // We use signInWithOtp to instruct Supabase to issue a native SSR session 
+        // for the existing identity without sending an email or magic link hash.
+        const { error: sessionError } = await ssrClient.auth.signInWithOtp({
+            email: profile.email,
+            options: { shouldCreateUser: false },
         })
 
         if (sessionError) {
-            console.error('[OAuth callback] verifyOtp error:', sessionError)
+            console.error('[OAuth callback] signInWithOtp error:', sessionError)
             return fail500()
         }
 
-        // response now carries real sb-access-token + sb-refresh-token cookies
         return response
 
     } catch (error) {
