@@ -141,7 +141,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
         // ── Build the redirect response first ─────────────────────────────
         const destination = isNewUser || !onboardingDone ? '/onboarding' : '/dashboard'
-        let response = NextResponse.redirect(new URL(destination, req.url))
+        const response = NextResponse.redirect(new URL(destination, req.url))
 
         // Clear the OAuth state cookie
         response.cookies.set(STATE_COOKIE, '', {
@@ -154,7 +154,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
         // ── Create SSR client whose cookie handlers write to the response ──
         // This is the ONLY correct way to set Supabase session cookies in
-        // an App Router Route Handler.
+        // an App Router Route Handler. By mutating the same `response` object,
+        // all cookies (sb-access-token, sb-refresh-token, etc.) accumulate.
         const ssrClient = createServerClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
             process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -164,14 +165,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
                         return req.cookies.get(name)?.value
                     },
                     set(name: string, value: string, options: CookieOptions) {
-                        // Write to both request and the mutable response reference
                         req.cookies.set({ name, value, ...options })
-                        response = NextResponse.redirect(new URL(destination, req.url))
                         response.cookies.set({ name, value, ...options })
                     },
                     remove(name: string, options: CookieOptions) {
                         req.cookies.set({ name, value: '', ...options })
-                        response = NextResponse.redirect(new URL(destination, req.url))
                         response.cookies.set({ name, value: '', ...options })
                     },
                 },
