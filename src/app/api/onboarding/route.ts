@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createClient } from '@supabase/supabase-js'
+import { cookies } from 'next/headers'
+import { createServerClient } from '@supabase/ssr'
+import type { CookieOptions } from '@supabase/ssr'
 
 interface OnboardingBody {
     niche: string
@@ -21,22 +24,36 @@ function isOnboardingBody(val: unknown): val is OnboardingBody {
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
     try {
-        const supabase = await createServerSupabaseClient()
-        const {
-            data: { session },
-        } = await supabase.auth.getSession()
+        // ── Auth client (typed) to get the session ────────────────────────
+        const cookieStore = await cookies()
+
+        const authClient = createServerClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            {
+                cookies: {
+                    get(name: string) { return cookieStore.get(name)?.value },
+                    set(name: string, value: string, options: CookieOptions) {
+                        try { cookieStore.set({ name, value, ...options }) } catch { /* server component */ }
+                    },
+                    remove(name: string, options: CookieOptions) {
+                        try { cookieStore.set({ name, value: '', ...options }) } catch { /* server component */ }
+                    },
+                },
+            }
+        )
+
+        const { data: { session } } = await authClient.auth.getSession()
 
         if (!session) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
+        // ── Validate body ─────────────────────────────────────────────────
         const body: unknown = await req.json()
 
         if (!isOnboardingBody(body)) {
-            return NextResponse.json(
-                { error: 'Invalid request body' },
-                { status: 400 }
-            )
+            return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
         }
 
         const { niche, linkedin_time, target_audience, goals } = body
@@ -45,7 +62,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             return NextResponse.json({ error: 'Work stream is required' }, { status: 400 })
         }
 
-        const { error } = await supabase
+        // ── Admin client (untyped by design) to write data ────────────────
+        // Using createClient directly avoids Postgrest v12 generic inference
+        // issues with hand-written Database types.
+        const admin = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!,
+            { auth: { autoRefreshToken: false, persistSession: false } }
+        )
+
+        const { error } = await admin
             .from('profiles')
             .update({
                 niche: niche.trim(),
@@ -63,16 +89,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             )
         }
 
-        // Log goals + linkedin_time to usage_logs as metadata (non-critical)
+        // ── Fire-and-forget usage log ─────────────────────────────────────
         void (async () => {
             try {
-                await supabase.from('usage_logs').insert({
+                await admin.from('usage_logs').insert({
                     user_id: session.user.id,
-                    action: 'onboarding_complete' as string,
+                    action: 'onboarding_complete',
                     model_used: 'none',
                     tokens_used: 0,
                 })
-            } catch { /* swallow */ }
+            } catch { /* swallow — non-critical */ }
         })()
 
         return NextResponse.json({

@@ -272,35 +272,43 @@ export interface LinkedInTokenResponse {
     scope: string
 }
 
-// ─── Supabase DB Types (for convenience) ─────────────────────────────────────
+// ─── Supabase DB Types (Postgrest v12 compatible) ────────────────────────────
+//
+// Each table MUST have a Relationships key (even if empty []).
+// Without it, @supabase/ssr v12's type engine narrows all table
+// operations to `never`, causing TS2345 / TS2769 in tsc --noEmit.
 
 export type ProfileInsert = Omit<Profile, 'created_at' | 'updated_at'> & { created_at?: string; updated_at?: string }
 export type ProfileUpdate = Partial<Omit<Profile, 'id'>>
-
 export type VoiceProfileInsert = Omit<VoiceProfile, 'id' | 'created_at' | 'updated_at'> & { id?: string; created_at?: string; updated_at?: string }
 export type VoiceProfileUpdate = Partial<Omit<VoiceProfile, 'id'>>
-
 export type PostInsert = Omit<Post, 'id' | 'created_at' | 'updated_at'> & { id?: string; created_at?: string; updated_at?: string }
 export type PostUpdate = Partial<Omit<Post, 'id'>>
-
 export type UsageLogInsert = Omit<UsageLog, 'id' | 'created_at'> & { id?: string; created_at?: string }
+
+// Table helper – every table entry must include Relationships for Postgrest v12
+type TableDef<R, I, U> = { Row: R; Insert: I; Update: U; Relationships: [] }
 
 export interface Database {
     public: {
         Tables: {
-            profiles: { Row: Profile; Insert: ProfileInsert; Update: ProfileUpdate }
-            voice_profiles: { Row: VoiceProfile; Insert: VoiceProfileInsert; Update: VoiceProfileUpdate }
-            posts: { Row: Post; Insert: PostInsert; Update: PostUpdate }
-            post_versions: { Row: PostVersion; Insert: Partial<PostVersion>; Update: Partial<PostVersion> }
-            analytics: { Row: PostAnalytics; Insert: Partial<PostAnalytics>; Update: Partial<PostAnalytics> }
-            profile_analytics: { Row: ProfileAnalytics; Insert: Partial<ProfileAnalytics>; Update: Partial<ProfileAnalytics> }
-            teams: { Row: Team; Insert: Partial<Team>; Update: Partial<Team> }
-            team_members: { Row: TeamMember; Insert: Partial<TeamMember>; Update: Partial<TeamMember> }
-            clients: { Row: Client; Insert: Partial<Client>; Update: Partial<Client> }
-            engagement_queue: { Row: EngagementQueueItem; Insert: Partial<EngagementQueueItem>; Update: Partial<EngagementQueueItem> }
-            comment_templates: { Row: CommentTemplate; Insert: Partial<CommentTemplate>; Update: Partial<CommentTemplate> }
-            usage_logs: { Row: UsageLog; Insert: UsageLogInsert; Update: Partial<Omit<UsageLog, 'id'>> }
-            referrals: { Row: Referral; Insert: Partial<Referral>; Update: Partial<Referral> }
+            profiles: TableDef<Profile, ProfileInsert, ProfileUpdate>
+            voice_profiles: TableDef<VoiceProfile, VoiceProfileInsert, VoiceProfileUpdate>
+            posts: TableDef<Post, PostInsert, PostUpdate>
+            post_versions: TableDef<PostVersion, Partial<PostVersion>, Partial<Omit<PostVersion, 'id'>>>
+            analytics: TableDef<PostAnalytics, Partial<PostAnalytics>, Partial<Omit<PostAnalytics, 'id'>>>
+            profile_analytics: TableDef<ProfileAnalytics, Partial<ProfileAnalytics>, Partial<Omit<ProfileAnalytics, 'id'>>>
+            teams: TableDef<Team, Partial<Team>, Partial<Omit<Team, 'id'>>>
+            team_members: TableDef<TeamMember, Partial<TeamMember>, Partial<TeamMember>>
+            clients: TableDef<Client, Partial<Client>, Partial<Omit<Client, 'id'>>>
+            engagement_queue: TableDef<EngagementQueueItem, Partial<EngagementQueueItem>, Partial<Omit<EngagementQueueItem, 'id'>>>
+            comment_templates: TableDef<CommentTemplate, Partial<CommentTemplate>, Partial<Omit<CommentTemplate, 'id'>>>
+            usage_logs: TableDef<UsageLog, UsageLogInsert, Partial<Omit<UsageLog, 'id'>>>
+            referrals: TableDef<Referral, Partial<Referral>, Partial<Omit<Referral, 'id'>>>
         }
+        Views: Record<string, never>
+        Functions: Record<string, never>
+        Enums: Record<string, never>
+        CompositeTypes: Record<string, never>
     }
 }
