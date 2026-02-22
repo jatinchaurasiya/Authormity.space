@@ -5,14 +5,14 @@ const IV_LENGTH = 16
 const AUTH_TAG_LENGTH = 16
 
 function getKey(): Buffer {
-    const raw = process.env.TOKEN_ENCRYPTION_KEY
-    if (!raw) {
-        throw new Error('TOKEN_ENCRYPTION_KEY environment variable is not set')
+    const keyHex = process.env.TOKEN_ENCRYPTION_KEY
+    if (!keyHex) {
+        throw new Error('TOKEN_ENCRYPTION_KEY missing from environment')
     }
-    const key = Buffer.from(raw, 'hex')
+    const key = Buffer.from(keyHex, 'hex')
     if (key.length !== 32) {
         throw new Error(
-            `TOKEN_ENCRYPTION_KEY must be a 64-character hex string (32 bytes). Got ${key.length} bytes.`
+            `TOKEN_ENCRYPTION_KEY must be 32 bytes (64 hex chars). Got ${key.length} bytes.`
         )
     }
     return key
@@ -23,6 +23,9 @@ function getKey(): Buffer {
  * Returns a base64-encoded string: iv (16 bytes) + authTag (16 bytes) + ciphertext
  */
 export function encrypt(text: string): string {
+    if (!text || typeof text !== 'string') {
+        throw new Error('Encryption input must be a non-empty string')
+    }
     const key = getKey()
     const iv = randomBytes(IV_LENGTH)
     const cipher = createCipheriv(ALGORITHM, key, iv)
@@ -38,6 +41,9 @@ export function encrypt(text: string): string {
  * Decrypts a base64-encoded AES-256-GCM ciphertext produced by `encrypt`.
  */
 export function decrypt(cipher: string): string {
+    if (!cipher || typeof cipher !== 'string') {
+        throw new Error('Decryption input must be a non-empty string')
+    }
     const key = getKey()
     const buf = Buffer.from(cipher, 'base64')
 

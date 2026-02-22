@@ -1,10 +1,21 @@
 const LINKEDIN_OIDC_BASE = 'https://www.linkedin.com/oauth/v2'
 const LINKEDIN_API_BASE = 'https://api.linkedin.com/v2'
 
+// ─── Response shapes (LinkedIn API) ──────────────────────────────────────────
+
+interface LinkedInRawTokenResponse {
+    access_token: string
+    refresh_token: string
+    expires_in: number
+    token_type: string
+}
+
+// ─── Public-facing types ──────────────────────────────────────────────────────
+
 export interface LinkedInTokens {
-    accessToken: string
-    refreshToken: string
-    expiresIn: number
+    access_token: string
+    refresh_token: string
+    expires_in: number
 }
 
 export interface LinkedInProfile {
@@ -14,13 +25,6 @@ export interface LinkedInProfile {
     avatar: string
 }
 
-interface LinkedInTokenResponse {
-    access_token: string
-    refresh_token: string
-    expires_in: number
-    token_type: string
-}
-
 interface LinkedInUserInfoResponse {
     sub: string
     name: string
@@ -28,8 +32,9 @@ interface LinkedInUserInfoResponse {
     family_name: string
     email: string
     picture?: string
-    locale?: string
 }
+
+// ─── Internal helper ──────────────────────────────────────────────────────────
 
 async function fetchOrThrow(url: string, init: RequestInit, label: string): Promise<Response> {
     const res = await fetch(url, init)
@@ -40,8 +45,11 @@ async function fetchOrThrow(url: string, init: RequestInit, label: string): Prom
     return res
 }
 
+// ─── Token exchange ───────────────────────────────────────────────────────────
+
 /**
- * Exchanges an authorization code for LinkedIn OAuth tokens.
+ * Exchange an authorization code for LinkedIn OAuth tokens.
+ * Returns snake_case keys exactly as LinkedIn provides them.
  */
 export async function exchangeCodeForToken(code: string): Promise<LinkedInTokens> {
     const res = await fetchOrThrow(
@@ -60,16 +68,23 @@ export async function exchangeCodeForToken(code: string): Promise<LinkedInTokens
         'token exchange'
     )
 
-    const data: LinkedInTokenResponse = await res.json()
+    const data = (await res.json()) as LinkedInRawTokenResponse
+
+    if (!data?.access_token) {
+        throw new Error('LinkedIn token exchange failed: access_token missing in response')
+    }
+
     return {
-        accessToken: data.access_token,
-        refreshToken: data.refresh_token,
-        expiresIn: data.expires_in,
+        access_token: data.access_token,
+        refresh_token: data.refresh_token ?? '',
+        expires_in: data.expires_in ?? 3600,
     }
 }
 
+// ─── Profile fetch ────────────────────────────────────────────────────────────
+
 /**
- * Fetches the authenticated user's LinkedIn profile via OIDC userinfo endpoint.
+ * Fetch the authenticated user's LinkedIn profile via OIDC userinfo endpoint.
  */
 export async function getLinkedInProfile(accessToken: string): Promise<LinkedInProfile> {
     const res = await fetchOrThrow(
@@ -78,17 +93,19 @@ export async function getLinkedInProfile(accessToken: string): Promise<LinkedInP
         'userinfo'
     )
 
-    const data: LinkedInUserInfoResponse = await res.json()
+    const data = (await res.json()) as LinkedInUserInfoResponse
     return {
         id: data.sub,
-        name: data.name ?? `${data.given_name} ${data.family_name}`.trim(),
+        name: data.name ?? `${data.given_name ?? ''} ${data.family_name ?? ''}`.trim(),
         email: data.email,
         avatar: data.picture ?? '',
     }
 }
 
+// ─── Token refresh ────────────────────────────────────────────────────────────
+
 /**
- * Refreshes an expired LinkedIn access token using a refresh token.
+ * Refresh an expired LinkedIn access token.
  */
 export async function refreshAccessToken(refreshToken: string): Promise<LinkedInTokens> {
     const res = await fetchOrThrow(
@@ -106,17 +123,23 @@ export async function refreshAccessToken(refreshToken: string): Promise<LinkedIn
         'token refresh'
     )
 
-    const data: LinkedInTokenResponse = await res.json()
+    const data = (await res.json()) as LinkedInRawTokenResponse
+
+    if (!data?.access_token) {
+        throw new Error('LinkedIn token refresh failed: access_token missing in response')
+    }
+
     return {
-        accessToken: data.access_token,
-        refreshToken: data.refresh_token,
-        expiresIn: data.expires_in,
+        access_token: data.access_token,
+        refresh_token: data.refresh_token ?? '',
+        expires_in: data.expires_in ?? 3600,
     }
 }
 
+// ─── Post publishing ──────────────────────────────────────────────────────────
+
 /**
- * Publishes a text post to LinkedIn.
- * Returns the LinkedIn post URN.
+ * Publish a text post to LinkedIn. Returns the post URN.
  */
 export async function publishTextPost(
     accessToken: string,
@@ -154,7 +177,7 @@ export async function publishTextPost(
 }
 
 /**
- * Deletes a LinkedIn post by URN.
+ * Delete a LinkedIn post by URN.
  */
 export async function deleteLinkedInPost(
     accessToken: string,
