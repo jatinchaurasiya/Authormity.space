@@ -17,19 +17,7 @@ export default async function AppLayout({
         redirect('/login')
     }
 
-    // ── Onboarding guard ─────────────────────────────────────────────────────
-    const { data: profile } = await supabase
-        .from('profiles')
-        .select('onboarding_completed')
-        .eq('id', session.user.id)
-        .maybeSingle()
 
-    const profileData = profile as { onboarding_completed: boolean } | null
-
-    // Redirect to onboarding if profile missing (new user) OR onboarding not complete
-    if (!profileData || !profileData.onboarding_completed) {
-        redirect('/onboarding')
-    }
 
     return <div className="flex min-h-screen">{children}</div>
 }

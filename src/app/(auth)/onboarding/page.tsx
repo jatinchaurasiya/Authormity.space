@@ -100,18 +100,7 @@ export default async function OnboardingPage({ searchParams }: Props) {
         // Non-fatal — wizard submit will retry the update
     }
 
-    // ── Skip wizard if already onboarded ─────────────────────────────────
-    const { data: profile } = await supabase
-        .from('profiles')
-        .select('onboarding_completed')
-        .eq('id', user.id)
-        .maybeSingle()
-
-    const profileData = profile as { onboarding_completed: boolean } | null
-
-    if (profileData?.onboarding_completed) {
-        redirect('/dashboard')
-    }
+    // Removed global redirect logic per user instructions to avoid infinite loops
 
     return <OnboardingWizard />
 }

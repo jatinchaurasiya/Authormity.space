@@ -18,12 +18,18 @@ export default async function DashboardPage() {
         redirect('/login')
     }
 
-    // 3. Fetch profile (name, plan, posts_used_this_month)
+    // 3. Fetch profile (name, plan, posts_used_this_month, onboarding_completed)
     const { data: profile } = await supabase
         .from('profiles')
-        .select('name, plan, posts_used_this_month')
+        .select('name, plan, posts_used_this_month, onboarding_completed')
         .eq('id', session.user.id)
         .single()
+
+    const typedProfile = profile as { name: string; plan: string; posts_used_this_month: number; onboarding_completed: boolean } | null
+
+    if (typedProfile?.onboarding_completed === false) {
+        redirect('/onboarding')
+    }
 
     // 4. Fetch posts (id, content, status, created_at)
     // Filter by user_id, order by created_at DESC, limit 10
@@ -35,15 +41,15 @@ export default async function DashboardPage() {
         .limit(10)
 
     // Fallbacks to satisfy strict TS
-    const safeProfile = profile || { name: 'Creator', plan: 'Free', posts_used_this_month: 0 }
-    
+    const safeProfile = profile || { name: 'Creator', plan: 'Free', posts_used_this_month: 0, onboarding_completed: false }
+
     type PostRecord = {
         id: string
         content: string
         status: string
         created_at: string
     }
-    
+
     const safePosts: PostRecord[] = posts || []
 
     return (
