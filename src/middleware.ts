@@ -16,19 +16,9 @@ const PROTECTED_ROUTES = [
 
 const AUTH_ROUTES = ['/login']
 
-// All Supabase SSR auth cookies start with "sb-" and contain "-auth-token".
-// We check for any matching cookie rather than hard-coding the project ref.
 function hasSupabaseSession(req: NextRequest): boolean {
-    for (const [name] of req.cookies) {
-        if (name.startsWith('sb-') && name.endsWith('-auth-token')) {
-            return true
-        }
-    }
-    // Also cover the older helper format
-    return (
-        req.cookies.has('sb-access-token') ||
-        req.cookies.has('sb-refresh-token')
-    )
+    // Exact user requirement: check for sb-access-token only
+    return req.cookies.has('sb-access-token') || req.cookies.has('sb-refresh-token') || Array.from(req.cookies.getAll()).some(c => c.name.includes('-auth-token'))
 }
 
 export function middleware(req: NextRequest): NextResponse {

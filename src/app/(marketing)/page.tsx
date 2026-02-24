@@ -4,12 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 
 export default function HomePage() {
-    const [isLoading, setIsLoading] = useState(false)
-
-    function handleLogin() {
-        setIsLoading(true)
-        window.location.href = '/api/auth/linkedin'
-    }
+    // Client-side 'isLoading' removed per user constraints (must be direct anchor navigation)
 
     return (
         <main className="min-h-screen bg-[#0a0a0f] text-white">
@@ -29,19 +24,18 @@ export default function HomePage() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <Link
-                        href="/login"
+                    <a
+                        href="/api/auth/linkedin"
                         className="rounded-lg px-4 py-2 text-sm font-medium text-white/60 hover:text-white transition-colors"
                     >
                         Sign in
-                    </Link>
-                    <button
-                        onClick={handleLogin}
-                        disabled={isLoading}
-                        className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 transition-colors disabled:opacity-60"
+                    </a>
+                    <a
+                        href="/api/auth/linkedin"
+                        className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 transition-colors"
                     >
-                        {isLoading ? 'Connecting…' : 'Get started free'}
-                    </button>
+                        Get started free
+                    </a>
                 </div>
             </nav>
 
@@ -68,36 +62,23 @@ export default function HomePage() {
 
                 {/* CTA buttons */}
                 <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-                    <button
+                    <a
                         id="hero-cta-btn"
-                        onClick={handleLogin}
-                        disabled={isLoading}
-                        className="group flex items-center gap-3 rounded-xl bg-[#0A66C2] px-8 py-4 text-[15px] font-semibold text-white shadow-lg transition-all hover:bg-[#004182] hover:shadow-blue-500/30 hover:shadow-xl active:scale-[0.98] disabled:opacity-60"
+                        href="/api/auth/linkedin"
+                        className="group flex items-center gap-3 rounded-xl bg-[#0A66C2] px-8 py-4 text-[15px] font-semibold text-white shadow-lg transition-all hover:bg-[#004182] hover:shadow-blue-500/30 hover:shadow-xl active:scale-[0.98]"
                     >
-                        {isLoading ? (
-                            <>
-                                <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                </svg>
-                                Connecting…
-                            </>
-                        ) : (
-                            <>
-                                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
-                                </svg>
-                                Continue with LinkedIn — it&apos;s free
-                            </>
-                        )}
-                    </button>
+                        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+                        </svg>
+                        Continue with LinkedIn — it&apos;s free
+                    </a>
 
-                    <Link
-                        href="/login"
+                    <a
+                        href="/api/auth/linkedin"
                         className="rounded-xl border border-white/10 px-8 py-4 text-[15px] font-medium text-white/60 hover:border-white/20 hover:text-white transition-all"
                     >
                         Sign in
-                    </Link>
+                    </a>
                 </div>
 
                 <p className="mt-4 text-xs text-white/25">No credit card required · Free plan includes 10 AI generations/month</p>

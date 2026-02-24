@@ -5,17 +5,7 @@ import Image from 'next/image'
 import { supabase } from '@/lib/supabase'
 
 export default function LoginPage() {
-    const [isLoading, setIsLoading] = useState(false)
-
-    async function handleLinkedInLogin() {
-        setIsLoading(true)
-        await supabase.auth.signInWithOAuth({
-            provider: 'linkedin_oidc',
-            options: {
-                redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/onboarding`,
-            },
-        })
-    }
+    // Removed client-side supabase auth per user instructions. Direct OAuth anchor navigation logic relies on /api/auth/linkedin
 
     return (
         <main className="min-h-screen bg-[#0a0a0f] flex items-center justify-center px-4">
@@ -42,35 +32,17 @@ export default function LoginPage() {
                     </div>
 
                     {/* LinkedIn Button */}
-                    <button
+                    <a
                         id="linkedin-login-btn"
-                        onClick={handleLinkedInLogin}
-                        disabled={isLoading}
-                        className="group relative flex w-full items-center justify-center gap-3 rounded-xl bg-[#0A66C2] px-6 py-4 text-[15px] font-semibold text-white shadow-lg transition-all duration-200 hover:bg-[#004182] hover:shadow-blue-500/30 hover:shadow-xl active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
+                        href="/api/auth/linkedin"
+                        className="group relative flex w-full items-center justify-center gap-3 rounded-xl bg-[#0A66C2] px-6 py-4 text-[15px] font-semibold text-white shadow-lg transition-all duration-200 hover:bg-[#004182] hover:shadow-blue-500/30 hover:shadow-xl active:scale-[0.98]"
                     >
-                        {isLoading ? (
-                            <>
-                                <svg
-                                    className="h-5 w-5 animate-spin"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                </svg>
-                                <span>Connecting…</span>
-                            </>
-                        ) : (
-                            <>
-                                {/* LinkedIn icon */}
-                                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
-                                </svg>
-                                <span>Continue with LinkedIn</span>
-                            </>
-                        )}
-                    </button>
+                        {/* LinkedIn icon */}
+                        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+                        </svg>
+                        <span>Continue with LinkedIn</span>
+                    </a>
 
                     {/* Divider */}
                     <div className="my-6 flex items-center gap-3">
