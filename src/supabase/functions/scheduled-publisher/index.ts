@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Supabase Edge Function — Scheduled Post Publisher
 // Runs every 5 minutes via Supabase cron job
 // Publishes scheduled LinkedIn posts
