@@ -9,9 +9,13 @@ export const metadata = {
 export default async function DashboardPage() {
     // 1. Get session using server-side client
     const supabase = await createServerSupabaseClient()
+
+
     const {
         data: { session },
     } = await supabase.auth.getSession()
+
+    console.log("SESSION USER ID:", session?.user?.id)
 
     // 2. Require session
     if (!session) {
@@ -24,6 +28,8 @@ export default async function DashboardPage() {
         .select('name, plan, posts_used_this_month, onboarding_completed')
         .eq('id', session.user.id)
         .single()
+
+    console.log("PROFILE FETCH RESULT:", profile)
 
     const typedProfile = profile as { name: string; plan: string; posts_used_this_month: number; onboarding_completed: boolean } | null
 

@@ -36,12 +36,12 @@ jobs:
         env:
           # Required for build — these are dummy values so Next.js doesn't error
           # Real values are configured in Vercel dashboard
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key' }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-service-key' }}
-          TOKEN_ENCRYPTION_KEY: ${{ secrets.TOKEN_ENCRYPTION_KEY || 'a0b1c2d3e4f5a0b1c2d3e4f5a0b1c2d3e4f5a0b1c2d3e4f5a0b1c2d3e4f5a0b1' }}
-          LINKEDIN_CLIENT_ID: ${{ secrets.LINKEDIN_CLIENT_ID || 'placeholder' }}
-          LINKEDIN_CLIENT_SECRET: ${{ secrets.LINKEDIN_CLIENT_SECRET || 'placeholder' }}
-          LINKEDIN_REDIRECT_URI: ${{ secrets.LINKEDIN_REDIRECT_URI || 'https://authormity.space/api/auth/callback' }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || 'placeholder' }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets['NEXT_PUBLIC_SUPABASE_URL'] || 'https://placeholder.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets['NEXT_PUBLIC_SUPABASE_ANON_KEY'] || 'placeholder-anon-key' }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets['SUPABASE_SERVICE_ROLE_KEY'] || 'placeholder-service-key' }}
+          TOKEN_ENCRYPTION_KEY: ${{ secrets['TOKEN_ENCRYPTION_KEY'] || 'a0b1c2d3e4f5a0b1c2d3e4f5a0b1c2d3e4f5a0b1c2d3e4f5a0b1c2d3e4f5a0b1' }}
+          LINKEDIN_CLIENT_ID: ${{ secrets['LINKEDIN_CLIENT_ID'] || 'placeholder' }}
+          LINKEDIN_CLIENT_SECRET: ${{ secrets['LINKEDIN_CLIENT_SECRET'] || 'placeholder' }}
+          LINKEDIN_REDIRECT_URI: ${{ secrets['LINKEDIN_REDIRECT_URI'] || 'https://authormity.space/api/auth/callback' }}
+          OPENROUTER_API_KEY: ${{ secrets['OPENROUTER_API_KEY'] || 'placeholder' }}
           NEXT_PUBLIC_APP_URL: https://authormity.space
